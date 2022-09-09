@@ -1,0 +1,17 @@
+{
+  "name": "forta-discord",
+  "author": "lidofinance",
+  "license": "MIT",
+  "main": "index.js",
+  "version": "1.0.0",
+  "dependencies": {
+    "@koa/router": "^10.1.1",
+    "axios": "^0.26.0",
+    "js-yaml": "^4.1.0",
+    "koa": "^2.13.4",
+    "koa-bodyparser": "^4.3.0"
+  },
+  "devDependencies": {
+    "prettier": "2.6.2"
+  }
+}

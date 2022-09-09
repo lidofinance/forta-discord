@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+  alertmanager-discord:
+    build:
+      context: .
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./forta-discord.yml:/etc/forta-discord.yml

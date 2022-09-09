@@ -1,0 +1,7 @@
+hooks:
+  - slug: ethereum
+    hook: https://discord.com/api/webhook/123
+  - slug: polygon
+    hook: https://discord.com/api/webhook/456
+  - slug: avalanche
+    hook: https://discord.com/api/webhook/789
