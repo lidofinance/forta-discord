@@ -7,7 +7,6 @@ COPY --chown=node:node . .
 FROM node:14.19.0-alpine3.15 as base
 RUN apk add --no-cache tini
 ENV NODE_ENV production
-ENV HOOK=https://discord.com/api/webhooks/924163653278654545/NXYX6aJ7SCtDhn5xEK3xKuzxu8t0UMvZi2GzhmfJQISI7sCCa3luK_QkYabVQcIlMncf
 COPY --from=deps /usr/src/app /usr/src/app
 WORKDIR /usr/src/app
 USER node
