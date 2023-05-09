@@ -1,6 +1,7 @@
 const axios = require("axios");
 
 const colors = new Map([
+  ["CRITICAL", 0x6e0500],
   ["HIGH", 0xd50000],
   ["MEDIUM", 0xf19132],
   ["LOW", 0x1690ff],
