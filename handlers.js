@@ -21,39 +21,67 @@ async function handleHook(ctx) {
     return;
   }
 
-  if (
-    ctx.request.body === undefined ||
-    !Array.isArray(ctx.request.body.alerts)
-  ) {
+  if (!Array.isArray(ctx.request.body?.variables?.alerts)) {
     ctx.status = 400;
     console.error("Unexpected request from Forta:", ctx.request.body);
     return;
   }
 
   const embeds = [];
+  let hasInvalidAlerts = false;
 
-  ctx.request.body.alerts.forEach((alert) => {
-    if (alert.severity && alert.name && alert.description) {
-      embeds.push({
+  ctx.request.body.variables.alerts
+    .map((alert) => alert.finding)
+    .forEach((alert) => {
+      if (!alert || !alert.severity || !alert.name || !alert.description) {
+        hasInvalidAlerts = true;
+        return;
+      }
+
+      const e = {
         title: `[${alert.severity}] ${alert.name}`,
-        description:
-          alert.description +
-          (alert.source.tx != undefined
-            ? `\nTX: ${alert.source.tx.hash}`
-            : "") +
-          `\nBlock: ${alert.source.block.hash}`,
+        description: alert.description,
         color: colors.get(alert.severity) || defaultColor,
-      });
-    }
-  });
+        fields: [],
+      };
 
-  if (!embeds.length) {
+      const { chainId, blockHash, txHash } = getSourceFromAlert(alert);
+      const explorerBase = etherscanBase(chainId);
+
+      if (blockHash) {
+        e.fields.push({
+          name: "",
+          value: `[Block](${explorerBase}/block/${blockHash})`,
+          inline: true,
+        });
+      }
+      if (txHash) {
+        e.fields.push({
+          name: "",
+          value: `[Transaction](${explorerBase}/tx/${txHash})`,
+          inline: true,
+        });
+      }
+
+      embeds.push(e);
+    });
+
+  if (hasInvalidAlerts) {
     ctx.status = 400;
     console.warn(
-      "Nothing to send, all alerts has been filtered out. Received data:",
-      ctx.request.body.alerts
+      "Got invalid alerts objects in data:",
+      ctx.request.body.variables.alerts
     );
     return;
+  }
+
+  // TODO: Match with the sent ones.
+  if (embeds.length) {
+    ctx.body = {
+      data: {
+        sendAlerts: [],
+      },
+    };
   }
 
   let chunk = [];
@@ -99,6 +127,40 @@ async function handleHealthcheck(ctx) {
         console.error(err);
       }
     });
+}
+
+function getSourceFromAlert(alert) {
+  let o = {
+    chainId: undefined,
+    blockHash: undefined,
+    txHash: undefined,
+  };
+
+  const block = alert.source?.blocks?.at(0);
+  if (block) {
+    o = {
+      ...o,
+      blockHash: block.hash,
+      chainId: o.chainId ?? block.chainId,
+    };
+  }
+
+  const tx = alert.source?.transactions?.at(0);
+  if (tx) {
+    o = {
+      ...o,
+      txHash: tx.hash,
+      chainId: o.chainId ?? tx.chainId,
+    };
+  }
+
+  return o;
+}
+
+function etherscanBase(chainId) {
+  let subdomain = "";
+  if (chainId === 17_000) subdomain = "holesky";
+  return `https://${subdomain}${subdomain ? "." : ""}etherscan.io`;
 }
 
 module.exports = {

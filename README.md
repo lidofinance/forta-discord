@@ -20,3 +20,35 @@ hooks:
   - slug: avalanche
     hook: https://discord.com/api/webhook/789
 ```
+
+### Finding object
+
+```typescript
+type FindingV2 = {
+  name: string;
+  description: string;
+  alertId: string;
+  severity: string;
+  type: string;
+  metadata: { [key: string]: string };
+  addresses: string[];
+  labels: Label[];
+  uniqueKey: string;
+  source: {
+    chains?: { chainId: number }[];
+    blocks?: {
+      chainId: number;
+      hash: string;
+      number: number;
+    }[];
+    transactions?: {
+      chainId: number;
+      hash: string;
+    }[];
+    urls?: { url: string }[];
+    alerts?: { id: string }[];
+    customSources?: { name: string; value: string; }[];
+  };
+  timestamp: string;
+}
+```
