@@ -113,33 +113,8 @@ async function handleHook(ctx) {
 }
 
 async function handleHealthcheck(ctx) {
-  let hook;
-
-  for (const key in ctx.routes) {
-    hook = ctx.routes[key];
-    break;
-  }
-
-  if (hook === undefined) {
-    console.warn("No routes has been configured!");
-    ctx.status = 503;
-    return;
-  }
-
-  await axios
-    .get(hook)
-    .then(() => {
-      ctx.status = 200;
-      ctx.body = { uptime: process.uptime() };
-    })
-    .catch((err) => {
-      ctx.status = 503;
-      if (err.response && err.response.data) {
-        console.error(err.response.data);
-      } else {
-        console.error(err);
-      }
-    });
+  ctx.status = 200;
+  ctx.body = { uptime: process.uptime() };
 }
 
 function getSourceFromAlert(alert) {
