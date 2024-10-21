@@ -7,7 +7,7 @@ const router = new Router();
 
 router
   .post(
-    "/hook/:slug",
+    "/api",
     bodyParser({
       enableTypes: ["json"],
       extendTypes: {

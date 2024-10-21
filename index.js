@@ -4,6 +4,7 @@ const Koa = require("koa");
 const yaml = require("js-yaml");
 const fs = require("fs");
 
+const { FindingSeverity } = require("./finding");
 const { router } = require("./router");
 
 const port = process.env.PORT || 5001;
@@ -12,9 +13,17 @@ const hookRegExp = new RegExp(
   "https://discord(?:app)?.com/api/webhooks/[0-9]+/[a-zA-Z0-9_-]+"
 );
 
+/**
+ * @typedef {Object} Hook
+ * @property {string} url
+ * @property {string} minSeverity
+ */
+
 if (require.main === module) {
   let config;
-  let routes = {};
+
+  /** @type {Hook[]} */
+  let hooks = [];
 
   try {
     config = yaml.load(fs.readFileSync(configPath));
@@ -22,28 +31,32 @@ if (require.main === module) {
     console.error("Failed to read configuration file:", err.message);
   }
 
-  if (
-    config !== undefined &&
-    config.hooks !== undefined &&
-    Array.isArray(config.hooks)
-  ) {
-    for (let route of config.hooks) {
-      if (
-        !route.hook ||
-        !route.hook.startsWith ||
-        !hookRegExp.test(route.hook)
-      ) {
-        console.warn("Not a valid discord web hook for slug =", route.slug);
-        continue;
+  if (Array.isArray(config?.hooks)) {
+    for (const key in config.hooks) {
+      /** @type {Hook} */
+      const hook = config.hooks[key];
+
+      if (!hookRegExp.test(hook.url)) {
+        console.error(`Not a valid discord web hook at index ${key}`);
+        process.exit(1);
       }
 
-      routes[route.slug] = route.hook;
+      if (!hook.minSeverity || !(hook.minSeverity in FindingSeverity)) {
+        console.error(
+          `Invalid severity level ${
+            hook.minSeverity
+          } at index ${key}, expected one of ${Object.keys(FindingSeverity)}`
+        );
+        process.exit(1);
+      }
+
+      hooks.push(hook);
     }
   }
 
   const app = new Koa();
 
-  app.context.routes = routes;
+  app.context.hooks = hooks;
   app.use(router.routes());
 
   app.listen(port, (err) => {

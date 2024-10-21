@@ -1,11 +1,14 @@
 const axios = require("axios");
 
+const { FindingSeverity } = require("./finding");
+
 const colors = new Map([
   ["CRITICAL", 0x6e0500],
   ["HIGH", 0xd50000],
   ["MEDIUM", 0xf19132],
   ["LOW", 0x1690ff],
   ["INFO", 0xf2f3ef],
+  ["UNKNOWN", 0x888888],
 ]);
 const defaultColor = 0xf2f3ef;
 
@@ -14,89 +17,99 @@ const maxEmbedsLength = 10;
 async function handleHook(ctx) {
   ctx.status = 200;
 
-  let hook = ctx.routes[ctx.params.slug];
-  if (hook === undefined) {
-    ctx.status = 404;
-    console.warn(`Slug "${ctx.params.slug}" was not found in routes`);
-    return;
-  }
-
   if (!Array.isArray(ctx.request.body?.variables?.alerts)) {
     ctx.status = 400;
     console.error("Unexpected request from Forta:", ctx.request.body);
     return;
   }
 
-  const embeds = [];
-  let hasInvalidAlerts = false;
+  function getEmbeds(minSeverity) {
+    return ctx.request.body.variables.alerts
+      .map((alert) => alert.finding)
+      .map((alert) => {
+        if (!alert || !alert.severity || !alert.name || !alert.description) {
+          throw Error(`Invalid alert ${alert}`);
+        }
+        return alert;
+      })
+      .filter((alert) => (FindingSeverity[alert.severity] ?? 0) >= minSeverity)
+      .map((alert) => {
+        const e = {
+          title: `[${alert.severity}] ${alert.name}`,
+          description: alert.description,
+          color: colors.get(alert.severity) || defaultColor,
+          fields: [],
+        };
 
-  ctx.request.body.variables.alerts
-    .map((alert) => alert.finding)
-    .forEach((alert) => {
-      if (!alert || !alert.severity || !alert.name || !alert.description) {
-        hasInvalidAlerts = true;
-        return;
-      }
+        const { chainId, blockHash, txHash } = getSourceFromAlert(alert);
+        const explorerBase = etherscanBase(chainId);
 
-      const e = {
-        title: `[${alert.severity}] ${alert.name}`,
-        description: alert.description,
-        color: colors.get(alert.severity) || defaultColor,
-        fields: [],
-      };
+        if (blockHash) {
+          e.fields.push({
+            name: "",
+            value: `[Block](${explorerBase}/block/${blockHash})`,
+            inline: true,
+          });
+        }
+        if (txHash) {
+          e.fields.push({
+            name: "",
+            value: `[Transaction](${explorerBase}/tx/${txHash})`,
+            inline: true,
+          });
+        }
 
-      const { chainId, blockHash, txHash } = getSourceFromAlert(alert);
-      const explorerBase = etherscanBase(chainId);
+        return e;
+      });
+  }
 
-      if (blockHash) {
-        e.fields.push({
-          name: "",
-          value: `[Block](${explorerBase}/block/${blockHash})`,
-          inline: true,
-        });
-      }
-      if (txHash) {
-        e.fields.push({
-          name: "",
-          value: `[Transaction](${explorerBase}/tx/${txHash})`,
-          inline: true,
-        });
-      }
+  let embeds;
 
-      embeds.push(e);
-    });
-
-  if (hasInvalidAlerts) {
+  try {
+    embeds = getEmbeds(-1); // All severity levels.
+  } catch (e) {
     ctx.status = 400;
-    console.warn(
+    console.error(e);
+    console.error(
       "Got invalid alerts objects in data:",
       ctx.request.body.variables.alerts
     );
     return;
+  } finally {
+    console.log(`Embeds to send ${JSON.stringify(embeds)}`);
+  }
+
+  for (const hook of ctx.hooks) {
+    let chunk = [];
+
+    try {
+      embeds = getEmbeds(FindingSeverity[hook.minSeverity]);
+    } catch (e) {
+      ctx.status = 400;
+      console.error(e);
+      return;
+    }
+
+    while ((chunk = embeds.splice(0, maxEmbedsLength)) && chunk.length) {
+      await axios
+        .post(hook.url, { embeds: chunk })
+        .then(() => {
+          console.log(chunk.length + " embeds sent");
+        })
+        .catch((err) => {
+          ctx.status = 500;
+          console.error(err);
+          return;
+        });
+    }
   }
 
   // TODO: Match with the sent ones.
-  if (embeds.length) {
-    ctx.body = {
-      data: {
-        sendAlerts: [],
-      },
-    };
-  }
-
-  let chunk = [];
-  while ((chunk = embeds.splice(0, maxEmbedsLength)) && chunk.length) {
-    await axios
-      .post(hook, { embeds: chunk })
-      .then(() => {
-        console.log(chunk.length + " embeds sent");
-      })
-      .catch((err) => {
-        ctx.status = 500;
-        console.error(err);
-        return;
-      });
-  }
+  ctx.body = {
+    data: {
+      sendAlerts: [],
+    },
+  };
 }
 
 async function handleHealthcheck(ctx) {
